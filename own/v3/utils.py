@@ -78,3 +78,23 @@ def evaluate_deepctr(val_labels,val_pred_ans,userid_list,target):
     print('\033[32;1m[uAUC]\033[0m weighted uAUC: \033[31;4m{}\033[0m \n'.format(weight_auc))
     return weight_auc
 
+
+def print_end(FLAGS):
+    print('\033[32;1m[PARA]\033[0m' +
+          ' epochs: {}'.format(FLAGS.epochs) +
+          ' batch_size: {}'.format(FLAGS.batch_size) +
+          ' emb_dim: {}'.format(FLAGS.emb_dim) +
+          ' expert_dim: {}'.format(FLAGS.expert_dim) +
+          ' dnn1: {}'.format(FLAGS.dnn1) +
+          ' dnn2: {}'.format(FLAGS.dnn2) +
+          ' dropout: {}'.format(FLAGS.dropout) +
+          ' lr: {}'.format(FLAGS.lr) +
+          ' l2: {}'.format(FLAGS.l2) +
+          ' day: {}'.format(FLAGS.day) +
+          ' copy: {}'.format(FLAGS.copy) +
+          ' model: {}'.format(FLAGS.model) +
+          ' expert_num: {}'.format(FLAGS.expert_num) +
+          ' mem_size: {}'.format(FLAGS.mem_size) +
+          # ' : {}'.format(FLAGS.) +
+          ' \n')
+    print('\033[32;1m' + '=' * 86 + '\033[0m')
