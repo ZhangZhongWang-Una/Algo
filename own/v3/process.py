@@ -9,7 +9,7 @@ from tqdm import tqdm
 USER_ACTION = '../../data/v1/origin/user_action.csv'
 FEED_INFO = '../../data/v1/origin/feed_info.csv'
 TEST_A = '../../data/v1/origin/test_a.csv'
-ROOT_PATH = '../../data/v3/'
+ROOT_PATH = '../../data/v3/para_id/'
 FEA_COLUMN_LIST = ["read_comment", "like", "click_avatar",  "forward"]
 SPACE_PARA = ['description', 'ocr', 'asr', 'description_char', 'ocr_char', 'asr_char']
 SEMICOLON_PARA = ['manual_keyword_list', 'machine_keyword_list', 'manual_tag_list', 'machine_tag_list']
@@ -160,6 +160,7 @@ def process_train_data_all():
     print('save train data done')
 
 
+########
 def process_user_action_table():
     print('process_user_action_table')
     # user_action信息表
@@ -178,6 +179,7 @@ def process_user_action_table():
     user_feature_col = [b + "sum_user" for b in FEA_COLUMN_LIST]
     data[feed_feature_col] = data[feed_feature_col].fillna(0)
     data[user_feature_col] = data[user_feature_col].fillna(0)
+    data[feed_feature_col] = data[feed_feature_col].astype(int)
     data[user_feature_col] = data[user_feature_col].astype(int)
 
     data.to_csv(os.path.join(ROOT_PATH, "user_action.bin"), index=False)
@@ -327,6 +329,80 @@ def build_data_statis_table():
 
 
 
+def process_all_table():
+    print('process_user_action')
+    # user_action信息表
+    data = pd.read_csv(USER_ACTION)
+    # 基于userid统计的历史行为的次数
+    user_date_feature = pd.read_csv(os.path.join(ROOT_PATH, "{}_feature.csv".format('userid')))
+    user_date_feature = user_date_feature.set_index(["userid", "date_"])
+    # 基于feedid统计的历史行为的次数
+    feed_date_feature = pd.read_csv(os.path.join(ROOT_PATH, "{}_feature.csv".format('feedid')))
+    feed_date_feature = feed_date_feature.set_index(["feedid", "date_"])
+
+    data = data.join(feed_date_feature, on=["feedid", "date_"], how="left", rsuffix="_feed")
+    data = data.join(user_date_feature, on=["userid", "date_"], how="left", rsuffix="_user")
+
+    feed_feature_col = [b + "sum" for b in FEA_COLUMN_LIST]
+    user_feature_col = [b + "sum_user" for b in FEA_COLUMN_LIST]
+    data[feed_feature_col] = data[feed_feature_col].fillna(0)
+    data[user_feature_col] = data[user_feature_col].fillna(0)
+    data[feed_feature_col] = data[feed_feature_col].astype(int)
+    data[user_feature_col] = data[user_feature_col].astype(int)
+
+    statis = json.loads(json.load(open(os.path.join(ROOT_PATH, 'statis.json'))))
+    print('process_feed_info')
+    # feed信息表
+    feed_info = pd.read_csv(os.path.join(ROOT_PATH, 'feed_info_part.bin'))
+    for para in SPACE_PARA + SEMICOLON_PARA:
+        avg_len = int(statis[para+'_map_avg'])
+        single_data = feed_info[para + '_map']
+        data_list = list()
+        for row in tqdm(single_data, desc=para, total=len(single_data), leave=True, unit='row'):
+            row_list = list(map(int, row.split(' ')))
+            if len(row_list) >= avg_len:
+                row_list = row_list[:avg_len]
+            else:
+                row_list.extend([0] * (avg_len - len(row_list)))
+            data_list.append(str(row_list))
+        feed_info[para + '_map'] = data_list
+
+    feed_info[["authorid", "bgm_song_id", "bgm_singer_id"]] += 1
+    feed_info[["authorid", "bgm_song_id", "bgm_singer_id", "videoplayseconds"]] = \
+        feed_info[["authorid", "bgm_song_id", "bgm_singer_id", "videoplayseconds"]].fillna(0)
+    feed_info[["authorid", "bgm_song_id", "bgm_singer_id"]] = \
+        feed_info[["authorid", "bgm_song_id", "bgm_singer_id"]].astype(int)
+
+    # feed_info["videoplayseconds"] = np.log(feed_info["videoplayseconds"] + 1.0)
+
+
+    feed_info.to_csv('../../data/v3/feed_info_all.bin', index=False)
+    print('save to {}'.format('../../data/v3/feed_info_all.bin'))
+
+    data = data.join(feed_info, on="feedid", how="left", rsuffix="_feed")
+    data.to_csv('../../data/v3/user_action_all.bin', index=False)
+    print('save to {} \n'.format('../../data/v3/user_action_all.bin'))
+
+    test_a = pd.read_csv(TEST_A)
+
+    print('process_test_table')
+    # test_a信息表
+    data = pd.read_csv(TEST_A)
+    test_a["date_"] = 15
+
+    test_a = test_a.join(feed_info, on="feedid", how="left", rsuffix="_feed")
+    test_a = test_a.join(feed_date_feature, on=["feedid", "date_"], how="left", rsuffix="_feed")
+    test_a = test_a.join(user_date_feature, on=["userid", "date_"], how="left", rsuffix="_user")
+
+    test_a[feed_feature_col] = test_a[feed_feature_col].fillna(0)
+    test_a[user_feature_col] = test_a[user_feature_col].fillna(0)
+    test_a[feed_feature_col] = test_a[feed_feature_col].astype(int)
+    test_a[user_feature_col] = test_a[user_feature_col].astype(int)
+
+    test_a = test_a.drop(columns=['date_'])
+    test_a.to_csv('../../data/v3/test_a_all.bin', index=False)
+    print('save to {}'.format('../../data/v3/test_a_all.bin'))
+
 if __name__ == '__main__':
     # statis_feature()
     # process_test_data()
@@ -335,6 +411,7 @@ if __name__ == '__main__':
     # build_data_id_table()
     # process_feed_table()
     # process_user_action_table()
-    process_test_table()
+    # process_test_table()
     # build_data_statis_table()
+    process_all_table()
     print(1)
