@@ -31,7 +31,7 @@ def Model(dnn_feature_columns, num_tasks, tasks, flags):
     emb_out = combined_dnn_input(sparse_embedding_list, dense_value_list)
 
     mem_out = MemoryLayer(memory_size=flags.mem_size)(emb_out)
-    conv_out = ConvLayer(64)(mem_out)
+    conv_out = ConvLayer(flags.conv_dim)(mem_out)
     dnn_out = DNN((flags.dnn1, flags.dnn2), dnn_activation, flags.l2, flags.dropout, use_bn=False, seed=flags.seed)(conv_out)
     mmoe_outs = MMOELayer(num_tasks, flags.expert_num, flags.expert_dim)(dnn_out)
     # mmoe_outs = MMOEAttLayer(num_tasks, flags.expert_num, flags.expert_dim, flags.dropout)(dnn_out)
