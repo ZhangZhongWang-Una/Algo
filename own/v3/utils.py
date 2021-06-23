@@ -7,43 +7,12 @@ import pandas as pd
 from collections import defaultdict
 from sklearn.metrics import roc_auc_score
 
-STR_PARA = ['description', 'ocr', 'asr', 'description_char', 'ocr_char', 'asr_char',
-            'manual_keyword_list', 'machine_keyword_list', 'manual_tag_list', 'machine_tag_list']
-LOG_COL = ['read_commentsum', 'read_commentsum_user', 'likesum', 'likesum_user',
-           'click_avatarsum', 'click_avatarsum_user', 'forwardsum', 'forwardsum_user']
 
 def load_data(root_path):
     train = pd.read_csv(os.path.join(root_path, 'train.csv'))
     val = pd.read_csv(os.path.join(root_path, 'val.csv'))
     test = pd.read_csv(os.path.join(root_path, 'test.csv'))
     return train, val, test
-
-
-def load_tvt_data(root_path, PARA, log=False):
-    user_action = pd.read_csv(os.path.join(root_path, 'user_action.bin'))
-    feed_info = pd.read_csv(os.path.join(root_path, 'feed_info_part.bin'))
-    feed_info = feed_info.set_index('feedid')
-    feed_info["videoplayseconds"] = np.log(feed_info["videoplayseconds"] + 1.0)
-    statis = json.loads(json.load(open(os.path.join(root_path, 'statis.json'))))
-    test = pd.read_csv(os.path.join(root_path, 'test_a.bin'))
-
-    # for para in PARA:
-    #     tmp = feed_info[para]
-    #     tmp_list = list()
-    #     for row in tmp:
-    #         tmp_list.append(row.split(' '))
-    #
-    #     feed_info[para] = tmp_list
-    data = user_action.join(feed_info, on="feedid", how="left", rsuffix="_feed")
-    test = test.join(feed_info, on="feedid", how="left", rsuffix="_feed")
-
-    if log:
-        data[LOG_COL] = np.log(data[LOG_COL] + 1.0)
-        test[LOG_COL] = np.log(data[LOG_COL] + 1.0)
-
-    train = data[data['date_'] < 14]
-    val = data[data['date_'] == 14]
-    return train, val, test, statis
 
 
 def uAUC(labels, preds, user_id_list):
@@ -128,6 +97,10 @@ def print_end(FLAGS):
           ' expert_num: {}'.format(FLAGS.expert_num) +
           ' mem_size: {}'.format(FLAGS.mem_size) +
           ' conv_dim: {}'.format(FLAGS.conv_dim) +
+          ' word_fea_len: {}'.format(FLAGS.word_fea_len) +
+          ' word_fea_dim: {}'.format(FLAGS.word_fea_dim) +
+          ' tag_fea_len: {}'.format(FLAGS.tag_fea_len) +
+          ' tag_fea_dim: {}'.format(FLAGS.tag_fea_dim) +
           # ' : {}'.format(FLAGS.) +
           ' \n')
     print('\033[32;1m' + '=' * 86 + '\033[0m')
