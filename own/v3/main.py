@@ -28,7 +28,7 @@ flags.DEFINE_integer('dnn2', 128, 'dnn_hidden_units in layer 2')
 flags.DEFINE_integer('expert_num', 4, 'MMOE expert num')
 flags.DEFINE_integer('mem_size', 8, 'memory layer mem size')
 flags.DEFINE_integer('day', 1, 'train dataset day select from ? to 14')
-flags.DEFINE_integer('model', 4, 'which model to select')
+flags.DEFINE_integer('model', 5, 'which model to select')
 flags.DEFINE_integer('seed', 2021, 'seed')
 flags.DEFINE_float('dropout', 0.0, 'dnn_dropout')
 flags.DEFINE_float('l2', 0.00, 'l2 reg')
@@ -47,11 +47,15 @@ sess = tf.Session(config=config)
 if 1 == FLAGS.model:
     from own.v3.model.model_clear import Model
 elif 2 == FLAGS.model:
-    from own.v3.model.model_att import Model
+    from own.v3.model.model_dcn import Model
 elif 3 == FLAGS.model:
     from own.v3.model.model_mem import Model
 elif 4 == FLAGS.model:
     from own.v3.model.model_conv import Model
+elif 5 == FLAGS.model:
+    from own.v3.model.model_trm import Model
+elif 6 == FLAGS.model:
+    from own.v3.model.model_ple import Model
 else:
     raise Exception('Unknown model:', FLAGS.model)
 

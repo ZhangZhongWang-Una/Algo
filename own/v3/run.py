@@ -22,8 +22,8 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_integer('epochs', 2, 'epochs')
 flags.DEFINE_integer('batch_size', 512, 'batch size')
-flags.DEFINE_integer('emb_dim', 16, 'embeddings dim')
-flags.DEFINE_integer('expert_dim', 8, 'MMOE expert dim')
+flags.DEFINE_integer('emb_dim', 32, 'embeddings dim')
+flags.DEFINE_integer('expert_dim', 16, 'MMOE expert dim')
 flags.DEFINE_integer('dnn1', 128, 'dnn_hidden_units in layer 1')
 flags.DEFINE_integer('dnn2', 128, 'dnn_hidden_units in layer 2')
 flags.DEFINE_integer('conv_dim', 64, 'conv layer dim')
@@ -31,15 +31,15 @@ flags.DEFINE_integer('expert_num', 4, 'MMOE expert num')
 flags.DEFINE_integer('mem_size', 8, 'memory layer mem size')
 flags.DEFINE_integer('day', 1, 'train dataset day select from ? to 14')
 flags.DEFINE_integer('model', 4, 'which model to select')
-flags.DEFINE_integer('word_fea_len', 20, 'length of word features ')
-flags.DEFINE_integer('word_fea_dim', 16, 'emb dim of word features ')
-flags.DEFINE_integer('tag_fea_len', 6, 'length of tag features ')
+flags.DEFINE_integer('word_fea_len', 32, 'length of word features ')
+flags.DEFINE_integer('word_fea_dim', 32, 'emb dim of word features ')
+flags.DEFINE_integer('tag_fea_len', 16, 'length of tag features ')
 flags.DEFINE_integer('tag_fea_dim', 32, 'emb dim of tag features ')
 flags.DEFINE_integer('seed', 2021, 'seed')
 flags.DEFINE_float('dropout', 0.0, 'dnn_dropout')
 flags.DEFINE_float('l2', 0.00, 'l2 reg')
 flags.DEFINE_float('lr', 0.001, 'learning_rate')
-flags.DEFINE_string('cuda', '0', 'CUDA_VISIBLE_DEVICES')
+flags.DEFINE_string('cuda', '1', 'CUDA_VISIBLE_DEVICES')
 flags.DEFINE_string('root_path', '../../data/v4/', 'data dir')
 flags.DEFINE_boolean('submit', True, 'Submit or not')
 flags.DEFINE_boolean('copy', False, 'Concat train and val or not')
@@ -53,18 +53,26 @@ sess = tf.Session(config=config)
 if 1 == FLAGS.model:
     from own.v3.model.model_clear import Model
 elif 2 == FLAGS.model:
-    from own.v3.model.model_att import Model
+    from own.v3.model.model_dcn import Model
 elif 3 == FLAGS.model:
     from own.v3.model.model_mem import Model
 elif 4 == FLAGS.model:
     from own.v3.model.model_conv import Model
+elif 5 == FLAGS.model:
+    from own.v3.model.model_trm import Model
+elif 6 == FLAGS.model:
+    from own.v3.model.model_ple import Model
 else:
     raise Exception('Unknown model:', FLAGS.model)
 
 TARGET = ["read_comment", "like", "click_avatar", "forward"]
-SPARE_FEATURES = ['userid', 'feedid', 'authorid', 'bgm_song_id', 'bgm_singer_id', 'device']
-DENSE_FEATURES = ['videoplayseconds', 'read_commentsum', 'read_commentsum_user', 'likesum', 'likesum_user',
+SPARE_FEATURES = ['userid', 'feedid', 'authorid', 'bgm_song_id', 'bgm_singer_id', 'device',
+                  'read_commentsum', 'read_commentsum_user', 'likesum', 'likesum_user',
                   'click_avatarsum', 'click_avatarsum_user', 'forwardsum', 'forwardsum_user']
+DENSE_FEATURES = ['videoplayseconds']
+# SPARE_FEATURES = ['userid', 'feedid', 'authorid', 'bgm_song_id', 'bgm_singer_id', 'device']
+# DENSE_FEATURES = ['videoplayseconds', 'read_commentsum', 'read_commentsum_user', 'likesum', 'likesum_user',
+#                   'click_avatarsum', 'click_avatarsum_user', 'forwardsum', 'forwardsum_user']
 WORD_FEATURES = []
 TAG_FEATURES = []
 
@@ -77,6 +85,7 @@ def interface():
     print('4. description_char    5. ocr_char            6. asr_char')
     print('7. all                 8.none')
     orderA = input('please enter the num of word features to choice it:')
+    # orderA = '8'
     if '7' == orderA:
         WORD_FEATURES.extend(['description_map', 'ocr_map', 'asr_map', 'description_char_map', 'ocr_char_map', 'asr_char_map'])
     elif '8' == orderA:
@@ -94,6 +103,7 @@ def interface():
     print('3. manual_tag          4. machine_tag')
     print('5. all                 6.none')
     orderB = input('please enter the num of tag features to choice it:')
+    # orderB = '2,3,4'
     print('\n')
     if '5' == orderB:
         TAG_FEATURES.extend(['manual_keyword_list_map', 'machine_keyword_list_map', 'manual_tag_list_map', 'machine_tag_list_map'])
@@ -150,6 +160,7 @@ def load_data(flags):
 
     data[DENSE_FEATURES] = np.log(data[DENSE_FEATURES] + 1.0)
     test[DENSE_FEATURES] = np.log(test[DENSE_FEATURES] + 1.0)
+
 
     train = data[data['date_'] < 14]
     val = data[data['date_'] == 14]

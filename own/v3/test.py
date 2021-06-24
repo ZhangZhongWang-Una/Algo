@@ -15,4 +15,3 @@ FEA_COLUMN_LIST = ["read_comment", "like", "click_avatar",  "forward"]
 statis = json.loads(json.load(open(os.path.join(ROOT_PATH, 'statis.json'))))
 tmp = int(statis['description_map_len'])
 print(1)
-

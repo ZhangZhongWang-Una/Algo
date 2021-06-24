@@ -1,9 +1,9 @@
 # -*- coding:utf-8 -*-
 from own.v3.model.modules import *
-
+from deepctr.layers.interaction import CrossNetMix
 
 def Model(dnn_feature_columns, num_tasks, tasks, flags):
-    print('\033[32;1m[MODEL]\033[0m model_conv.py \n')
+    print('\033[32;1m[MODEL]\033[0m model_dcn.py \n')
     l2_reg_embedding = 1e-5
     dnn_activation = 'relu'
 
@@ -13,11 +13,11 @@ def Model(dnn_feature_columns, num_tasks, tasks, flags):
     emb_out = combined_dnn_input(sparse_embedding_list, dense_value_list)
 
     mem_out = MemoryLayer(memory_size=flags.mem_size)(emb_out)
-    conv_out = ConvLayer(flags.conv_dim)(mem_out)
-    dnn_out = DNN((flags.dnn1, flags.dnn2), dnn_activation, flags.l2, flags.dropout, use_bn=False, seed=flags.seed)(conv_out)
-    mmoe_outs = MMOELayer(num_tasks, flags.expert_num, flags.expert_dim)(dnn_out)
-    # mmoe_outs = MMOEAttLayer(num_tasks, flags.expert_num, flags.expert_dim, flags.dropout)(dnn_out)
-    # mmoe_outs = MutilAttLayer(num_tasks, flags.expert_num, flags.expert_dim, flags.dropout)(dnn_out)
+    # conv_out = ConvLayer(flags.conv_dim)(mem_out)
+    dcn_out = CrossNetMix(low_rank=flags.dnn1)(mem_out)
+    # dnn_out = DNN((flags.dnn1, flags.dnn2), dnn_activation, flags.l2, flags.dropout, use_bn=False, seed=flags.seed)(mem_out)
+    mmoe_outs = MMOELayer(num_tasks, flags.expert_num, flags.expert_dim)(dcn_out)
+    # mmoe_outs = MMOEAttLayer(num_tasks, flags.expert_num, flags.expert_dim, flags.dropout)(dcn_out)
 
 
     task_outputs = []
