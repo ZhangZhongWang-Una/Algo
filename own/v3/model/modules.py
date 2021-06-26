@@ -7,7 +7,7 @@ from deepctr.layers.core import PredictionLayer, DNN
 from tensorflow.python.keras import backend as K
 import itertools
 from itertools import chain
-from tensorflow.python.keras.initializers import glorot_normal, zeros
+from tensorflow.python.keras.initializers import glorot_normal, zeros, Initializer
 from tensorflow.python.keras.layers import Layer
 from tensorflow.python.keras.regularizers import l2
 
@@ -233,3 +233,71 @@ class PLELayer(Layer):
                 gate_output_shared = tf.reshape(gate_output_shared, [-1, self.experts_units])
                 gate_output_share_final = gate_output_shared
         return gate_output_task_final
+
+
+class CGCLayer(Layer):
+    def __init__(self, num_tasks, experts_num, experts_units, seed=1024, **kwargs):
+        self.num_tasks = num_tasks
+        self.experts_num = experts_num
+        self.experts_units = experts_units
+        self.selector_num = 2
+        self.seed = seed
+        super(CGCLayer, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        input_dim = int(input_shape[-1])
+        self.experts_weight_share = self.add_weight(
+                name='experts_weight_share_1',
+                dtype=tf.float32,
+                shape=(input_dim, self.experts_units, self.experts_num),
+                initializer=glorot_normal(seed=self.seed))
+        self.experts_weight = []
+        self.gate_weight = []
+
+        for j in range(self.num_tasks):
+            # experts Task j
+            self.experts_weight.append(self.add_weight(
+                name='experts_weight_task{}'.format(j),
+                dtype=tf.float32,
+                shape=(input_dim, self.experts_units, self.experts_num),
+                initializer=glorot_normal(seed=self.seed)
+            ))
+            # gates Task j
+            self.gate_weight.append(self.add_weight(
+                name='gate_weight_task{}'.format(j),
+                dtype=tf.float32,
+                shape=(input_dim, self.experts_num * self.selector_num),
+                initializer=glorot_normal(seed=self.seed)
+            ))
+
+        super(CGCLayer, self).build(input_shape)
+
+    def call(self, inputs, **kwargs):
+        outputs = []
+        # experts shared outputs
+        experts_output_share = tf.tensordot(inputs, self.experts_weight_share, axes=(-1, 0))
+        for j in range(self.num_tasks):
+            experts_output_task = tf.tensordot(inputs, self.experts_weight[j], axes=(-1, 0))
+
+            gate_output_task = tf.matmul(inputs, self.gate_weight[j])
+            gate_output_task = tf.nn.softmax(gate_output_task)
+            gate_output_task = tf.multiply(concat_func([experts_output_task, experts_output_share], axis=2),
+                                           tf.expand_dims(gate_output_task, axis=1))
+            gate_output_task = tf.reduce_sum(gate_output_task, axis=2)
+            gate_output_task = tf.reshape(gate_output_task, [-1, self.experts_units])
+            outputs.append(gate_output_task)
+
+        return outputs
+
+
+class myInit(Initializer):
+    def __init__(self, matrix):
+        self.matrix = matrix
+
+    def __call__(self, shape, dtype=None, partition_info=None):
+        return K.variable(value=self.matrix, dtype=dtype)
+
+    def get_config(self):
+        return {
+            'matrix': self.matrix
+        }
