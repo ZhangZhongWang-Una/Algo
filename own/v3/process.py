@@ -56,23 +56,52 @@ def load_data_dict(path):
 '''
 统计目标行为的累加信息
 '''
-def statis_feature(start_day=1, end_day=15, agg='sum'):
-    history_data = pd.read_csv(USER_ACTION)[["userid", "date_", "feedid"] + FEA_COLUMN_LIST]
+# def statis_feature(start_day=1, end_day=15, agg='sum'):
+#     history_data = pd.read_csv(USER_ACTION)[["userid", "date_", "feedid"] + FEA_COLUMN_LIST]
+#     for dim in ["userid", "feedid"]:
+#         print('statis {} feature'.format(dim))
+#         user_data = history_data[[dim, "date_"] + FEA_COLUMN_LIST]
+#         res_arr = []
+#         for start in range(start_day, end_day + 1):
+#             temp = user_data[((user_data["date_"]) < start)]
+#             temp = temp.drop(columns=['date_'])
+#             temp = temp.groupby([dim]).agg([agg]).reset_index()
+#             temp.columns = list(map(''.join, temp.columns.values))
+#             temp["date_"] = start
+#             res_arr.append(temp)
+#         dim_feature = pd.concat(res_arr)
+#         feature_path = os.path.join(ROOT_PATH, "{}_feature.csv".format(dim))
+#         print('Save to: %s' % feature_path)
+#         dim_feature.to_csv(feature_path, index=False)
+
+PLAY_COLS = ['stay', 'play', 'is_finish', 'play_times']
+def statis_feature(start_day=1, end_day=15):
+    history_data = pd.read_csv(USER_ACTION)[["userid", "date_", "feedid", 'stay', 'play'] + FEA_COLUMN_LIST]
+    feed_on = pd.read_csv(FEED_INFO)[['feedid', 'videoplayseconds']]
+    feed_on = feed_on.set_index('feedid')
+    feed_on['videoplayseconds'] *= 1000
+    history_data = history_data.join(feed_on, on=["feedid"], how="left", rsuffix="_feed")
+    history_data['is_finish'] = (history_data['play'] >= history_data['videoplayseconds']).astype('int8')
+    history_data['play_times'] = history_data['play'] / history_data['videoplayseconds']
+
     for dim in ["userid", "feedid"]:
         print('statis {} feature'.format(dim))
-        user_data = history_data[[dim, "date_"] + FEA_COLUMN_LIST]
+        user_data = history_data[[dim, "date_"] + FEA_COLUMN_LIST + PLAY_COLS]
         res_arr = []
         for start in range(start_day, end_day + 1):
             temp = user_data[((user_data["date_"]) < start)]
             temp = temp.drop(columns=['date_'])
-            temp = temp.groupby([dim]).agg([agg]).reset_index()
+            agg = {"read_comment" : 'sum', "like": 'sum', "click_avatar": 'sum',  "forward": 'sum',
+                   'stay' : 'mean', 'play' : 'mean', 'is_finish' : 'mean', 'play_times' : 'mean'}
+            temp = temp.groupby([dim]).agg(agg).reset_index()
             temp.columns = list(map(''.join, temp.columns.values))
             temp["date_"] = start
             res_arr.append(temp)
         dim_feature = pd.concat(res_arr)
-        feature_path = os.path.join(ROOT_PATH, "{}_feature.csv".format(dim))
+        feature_path = os.path.join('../../data/v4', "{}_feature2.csv".format(dim))
         print('Save to: %s' % feature_path)
-        dim_feature.to_csv(feature_path, index=False)
+        dim_feature[FEA_COLUMN_LIST] = dim_feature[FEA_COLUMN_LIST].astype(int)
+        dim_feature.to_csv(feature_path, index=False, header=[dim, "read_commentsum", 'likesum', 'click_avatarsum', 'forwardsum', 'staysum', 'playsum', 'is_finishsum', 'play_timessum', "date_"])
 
 
 '''
@@ -176,6 +205,22 @@ def build_data_statis_table():
     print('save to {}'.format(os.path.join(ROOT_PATH, 'statis.json')))
 
 
+def build_feedid_embeddings():
+    feed_emb = pd.read_csv('../../data/v4/feed_embeddings.csv')
+    maxfeed = feed_emb['feedid'].max() + 1
+    feedids = list(feed_emb['feedid'])
+    feed_emb = feed_emb.set_index('feedid')
+    embeddings = np.random.randn(1, 512)
+
+    for i in tqdm(range(1, maxfeed), desc='Feed', total=maxfeed-1,):
+        if i in feedids:
+            tmp = np.array(feed_emb.loc[i].values[0].split(' ')[:-1], dtype=np.float64).reshape([1, 512])
+            embeddings = np.concatenate((embeddings, tmp), axis=0)
+        else:
+            embeddings = np.concatenate((embeddings, np.random.randn(1, 512)), axis=0)
+    np.save('../../data/v4/feed_embeddings.npy', embeddings)
+    print('save to ../../data/v4/feed_embeddings.npy')
+
 if __name__ == '__main__':
     # statis_feature()
     # process_test_data()
@@ -186,5 +231,7 @@ if __name__ == '__main__':
     # process_user_action_table()
     # process_test_table()
     # build_data_statis_table()
-    build_data_statis_table()
+    # build_data_statis_table()
+    # build_feedid_embeddings()
+    statis_feature()
     print(1)
