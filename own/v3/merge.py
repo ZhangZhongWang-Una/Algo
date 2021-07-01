@@ -1,10 +1,12 @@
 import numpy as np
 import pandas as pd
 import time
-nn_filename = r"./submit/submit_1624887693.csv"
-tree_filename = r"./submit/lgb_1624887693.csv"
-nn_weight = 0.55
-tree_weight = 1 - nn_weight
+nn_filename = r"./submit/a_1624969673.csv"
+tree_filename = r"./submit/tree_b_0.645964_0.624054_0.617390_0.710705_0.689846.csv"
+nn_weight = [0.9, 0.6, 0.6, 0.6]
+tree_weight = [0.1, 0.4, 0.4, 0.4]
+
+
 
 
 if __name__ == '__main__':

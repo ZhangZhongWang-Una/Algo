@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="Algo_11_TF1" autoUploadExternalChanges="true">
+  <component name="PublishConfigData" autoUpload="Always" serverName="zzw@59.77.134.11:22 password" autoUploadExternalChanges="true">
     <serverData>
       <paths name="59.77.134.8">
         <serverdata>
@@ -31,6 +31,13 @@
         </serverdata>
       </paths>
       <paths name="Idea2_11">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/zzw/code/Algo" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="zzw@59.77.134.11:22 password">
         <serverdata>
           <mappings>
             <mapping deploy="/home/zzw/code/Algo" local="$PROJECT_DIR$" />

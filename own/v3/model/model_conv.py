@@ -15,10 +15,8 @@ def Model(dnn_feature_columns, num_tasks, tasks, flags):
     mem_out = MemoryLayer(memory_size=flags.mem_size)(emb_out)
     conv_out = ConvLayer(flags.conv_dim)(mem_out)
     dnn_out = DNN((flags.dnn1, flags.dnn2), dnn_activation, flags.l2, flags.dropout, use_bn=False, seed=flags.seed)(conv_out)
-    mmoe_outs = MMOELayer(num_tasks, flags.expert_num, flags.expert_dim)(dnn_out)
-    # mmoe_outs = MMOEAttLayer(num_tasks, flags.expert_num, flags.expert_dim, flags.dropout)(dnn_out)
-    # mmoe_outs = MutilAttLayer(num_tasks, flags.expert_num, flags.expert_dim, flags.dropout)(dnn_out)
-
+    # mmoe_outs = MMOELayer(num_tasks, flags.expert_num, flags.expert_dim)(dnn_out)
+    mmoe_outs = CGCLayer(num_tasks, flags.expert_num, flags.expert_dim)(dnn_out)
 
     task_outputs = []
     for mmoe_out, task in zip(mmoe_outs, tasks):

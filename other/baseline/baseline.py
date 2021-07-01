@@ -216,7 +216,8 @@ def get_feature_columns():
 def main(argv):
     t = time.time() 
     dnn_feature_columns, linear_feature_columns = get_feature_columns()
-    stage = argv[1]
+    # stage = argv[1]
+    stage = 'offline_train'
     print('Stage: %s'%stage)
     eval_dict = {}
     predict_dict = {}

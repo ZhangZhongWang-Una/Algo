@@ -12,9 +12,12 @@ logging.basicConfig(level=logging.ERROR)
 warnings.filterwarnings('ignore')
 import tensorflow as tf
 from tqdm import tqdm
+from sklearn import decomposition
 from keras_preprocessing.sequence import pad_sequences
 from deepctr.feature_column import SparseFeat, DenseFeat, VarLenSparseFeat
 from own.v3.utils import evaluate_deepctr, pd, time, print_end, json, np
+from own.v3.model.modules import MatrixInit
+
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 flags = tf.compat.v1.app.flags
@@ -66,13 +69,12 @@ else:
     raise Exception('Unknown model:', FLAGS.model)
 
 TARGET = ["read_comment", "like", "click_avatar", "forward"]
-SPARE_FEATURES = ['userid', 'feedid', 'authorid', 'bgm_song_id', 'bgm_singer_id', 'device',
-                  'read_commentsum', 'read_commentsum_user', 'likesum', 'likesum_user',
-                  'click_avatarsum', 'click_avatarsum_user', 'forwardsum', 'forwardsum_user']
+SPARE_FEATURES = ['userid', 'feedid', 'authorid', 'bgm_song_id', 'bgm_singer_id', 'device']
 DENSE_FEATURES = ['videoplayseconds']
-# SPARE_FEATURES = ['userid', 'feedid', 'authorid', 'bgm_song_id', 'bgm_singer_id', 'device']
-# DENSE_FEATURES = ['videoplayseconds', 'read_commentsum', 'read_commentsum_user', 'likesum', 'likesum_user',
-#                   'click_avatarsum', 'click_avatarsum_user', 'forwardsum', 'forwardsum_user']
+SUM_FEATURES = ['read_commentsum', 'read_commentsum_user', 'likesum', 'likesum_user',
+                  'click_avatarsum', 'click_avatarsum_user', 'forwardsum', 'forwardsum_user'
+                ]
+                # ,'staysum', 'playsum', 'is_finishsum', 'play_timessum']
 WORD_FEATURES = []
 TAG_FEATURES = []
 
@@ -134,7 +136,7 @@ def load_data(flags):
 
     data = pd.read_csv(os.path.join(flags.root_path, 'user_action.csv'))
     data = data[data['date_'] >= flags.day]
-    test = pd.read_csv(os.path.join(flags.root_path, 'test_a.csv'))
+    test = pd.read_csv(os.path.join(flags.root_path, 'test_b.csv'))
     user_date_feature = pd.read_csv(os.path.join(flags.root_path, "userid_feature.csv"))
     user_date_feature = user_date_feature.set_index(["userid", "date_"])
     feed_date_feature = pd.read_csv(os.path.join(flags.root_path, "feedid_feature.csv"))
@@ -152,18 +154,21 @@ def load_data(flags):
     data = data.join(feed_info, on="feedid", how="left", rsuffix="_feed")
     test = test.join(feed_info, on="feedid", how="left", rsuffix="_feed")
 
-    date_feature_col = [b + "sum" for b in TARGET] + [b + "sum_user" for b in TARGET] + ['authorid', 'bgm_song_id', 'bgm_singer_id']
-    data[date_feature_col] = data[date_feature_col].fillna(0)
-    data[date_feature_col] = data[date_feature_col].astype(int)
-    test[date_feature_col] = test[date_feature_col].fillna(0)
-    test[date_feature_col] = test[date_feature_col].astype(int)
+    data[SPARE_FEATURES] = data[SPARE_FEATURES].fillna(0)
+    data[SPARE_FEATURES] = data[SPARE_FEATURES].astype(int)
+    test[SPARE_FEATURES] = test[SPARE_FEATURES].fillna(0)
+    test[SPARE_FEATURES] = test[SPARE_FEATURES].astype(int)
 
+    data[DENSE_FEATURES] = data[DENSE_FEATURES].fillna(0.)
+    data[DENSE_FEATURES] = data[DENSE_FEATURES].astype(float)
+    test[DENSE_FEATURES] = test[DENSE_FEATURES].fillna(0.)
+    test[DENSE_FEATURES] = test[DENSE_FEATURES].astype(float)
     data[DENSE_FEATURES] = np.log(data[DENSE_FEATURES] + 1.0)
     test[DENSE_FEATURES] = np.log(test[DENSE_FEATURES] + 1.0)
 
-
     train = data[data['date_'] < 14]
     val = data[data['date_'] == 14]
+
     return train, val, test
 
 
@@ -171,6 +176,7 @@ if __name__ == "__main__":
     interface()
     epochs = FLAGS.epochs
     batch_size = FLAGS.batch_size
+    DENSE_FEATURES.extend(SUM_FEATURES)
     statis = json.loads(json.load(open(os.path.join(FLAGS.root_path, 'statis.json'))))
 
     print('\033[32;1m[DATA]\033[0m start load data, please wait')
@@ -181,8 +187,15 @@ if __name__ == "__main__":
         train = data.copy()
 
     feature_names = SPARE_FEATURES + DENSE_FEATURES
-    sparse_feature_columns = [SparseFeat(feat, vocabulary_size=data[feat].max() + 1, embedding_dim=FLAGS.emb_dim) for
-                              feat in SPARE_FEATURES]
+
+    # feed_embeddings = np.load(os.path.join(FLAGS.root_path, 'feed_embeddings.npy'))
+    # pca = decomposition.PCA(n_components=FLAGS.emb_dim, svd_solver="auto", whiten=False)
+    # feed_embeddings = pca.fit_transform(feed_embeddings)
+    # SPARE_FEATURES.remove('feedid')
+    # sparse_feature_columns = [SparseFeat('feedid', vocabulary_size=data['feedid'].max() + 1, embedding_dim=FLAGS.emb_dim, embeddings_initializer=MatrixInit(feed_embeddings))]\
+    #                          + [SparseFeat(feat, vocabulary_size=data[feat].max() + 1, embedding_dim=FLAGS.emb_dim) for feat in SPARE_FEATURES]
+
+    sparse_feature_columns = [SparseFeat(feat, vocabulary_size=data[feat].max() + 1, embedding_dim=FLAGS.emb_dim) for feat in SPARE_FEATURES]
     dense_feature_columns = [DenseFeat(feat, 1) for feat in DENSE_FEATURES]
     word_feature_columns = [
         VarLenSparseFeat(SparseFeat(feat, vocabulary_size=int(statis[feat + '_len']), embedding_dim=FLAGS.word_fea_dim),
@@ -221,7 +234,6 @@ if __name__ == "__main__":
         val_auc = evaluate_deepctr(val_labels, val_pred_ans, userid_list, TARGET)
         if val_auc > highest_auc:
             highest_auc = val_auc
-
     print('\033[32;1m[EVAL]\033[0m 验证集最高AUC: \033[31;4m{}\033[0m '.format(highest_auc))
     t1 = time.time()
     pred_ans = train_model.predict(test_model_input, batch_size=batch_size * 20)
@@ -230,12 +242,13 @@ if __name__ == "__main__":
     ts = (t2 - t1) * 1000.0 / len(test) * 2000.0
     print('\033[32;1m[Time]\033[0m 4个目标行为2000条样本平均预测耗时（毫秒）：{:.3f}'.format(ts))
 
+    timestamp = str(int(time.time()))
     # 生成提交文件
     if FLAGS.submit:
         for i, action in enumerate(TARGET):
             test[action] = pred_ans[i]
-        file_name = "./submit/submit_" + str(int(time.time())) + ".csv"
+        file_name = "./submit/submit_" + timestamp + ".csv"
         test[['userid', 'feedid'] + TARGET].to_csv(file_name, index=None, float_format='%.6f')
         print('\033[32;1m[FILE]\033[0m save to {}'.format(file_name))
-
+    train_model.save('./ckpt/{}_{}.h5'.format(highest_auc, timestamp))
     print_end(FLAGS)

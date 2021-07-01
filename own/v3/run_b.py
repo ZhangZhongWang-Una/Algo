@@ -70,9 +70,11 @@ else:
 
 TARGET = ["read_comment", "like", "click_avatar", "forward"]
 SPARE_FEATURES = ['userid', 'feedid', 'authorid', 'bgm_song_id', 'bgm_singer_id', 'device']
-DENSE_FEATURES = []
+DENSE_FEATURES = ['videoplayseconds']
 SUM_FEATURES = ['read_commentsum', 'read_commentsum_user', 'likesum', 'likesum_user',
-                  'click_avatarsum', 'click_avatarsum_user', 'forwardsum', 'forwardsum_user']
+                  'click_avatarsum', 'click_avatarsum_user', 'forwardsum', 'forwardsum_user'
+                ]
+                # ,'staysum', 'playsum', 'is_finishsum', 'play_timessum']
 WORD_FEATURES = []
 TAG_FEATURES = []
 
@@ -84,8 +86,8 @@ def interface():
     print('1. description         2. ocr                 3. asr')
     print('4. description_char    5. ocr_char            6. asr_char')
     print('7. all                 8.none')
-    orderA = input('please enter the num of word features to choice it:')
-    # orderA = '8'
+    # orderA = input('please enter the num of word features to choice it:')
+    orderA = '7'
     if '7' == orderA:
         WORD_FEATURES.extend(['description_map', 'ocr_map', 'asr_map', 'description_char_map', 'ocr_char_map', 'asr_char_map'])
     elif '8' == orderA:
@@ -102,8 +104,8 @@ def interface():
     print('1. manual_keyword      2. machine_keyword')
     print('3. manual_tag          4. machine_tag')
     print('5. all                 6.none')
-    orderB = input('please enter the num of tag features to choice it:')
-    # orderB = '2,3,4'
+    # orderB = input('please enter the num of tag features to choice it:')
+    orderB = '5'
     print('\n')
     if '5' == orderB:
         TAG_FEATURES.extend(['manual_keyword_list_map', 'machine_keyword_list_map', 'manual_tag_list_map', 'machine_tag_list_map'])
@@ -117,7 +119,7 @@ def interface():
 
 
 def load_data(flags):
-    feed_info = pd.read_csv(os.path.join(flags.root_path, 'feed_info_map.csv'))[['feedid', 'bgm_song_id', 'bgm_singer_id'] + WORD_FEATURES + TAG_FEATURES]
+    feed_info = pd.read_csv(os.path.join(flags.root_path, 'feed_info_map.csv'))
     feed_info = feed_info.set_index('feedid')
 
     for feat in WORD_FEATURES:
@@ -132,27 +134,21 @@ def load_data(flags):
             genres_list.append(list(map(int, row.split(' '))))
         feed_info[feat] = list(pad_sequences(genres_list, maxlen=flags.tag_fea_len, padding='post', ))
 
-    data = pd.read_csv('../../data/v2/train.csv')
-    test = pd.read_csv('../../data/v2/test.csv')
+    data = pd.read_csv(os.path.join(flags.root_path, 'user_action.csv'))
     data = data[data['date_'] >= flags.day]
-
-    dense_cols = [f for f in data.columns if
-                  f not in ['date_', 'is_finish', 'play_times', 'play', 'stay', 'follow', 'favorite', ] + SPARE_FEATURES + TARGET]
-    # data = pd.read_csv(os.path.join(flags.root_path, 'user_action.csv'))
-    DENSE_FEATURES.extend(dense_cols)
-    # test = pd.read_csv(os.path.join(flags.root_path, 'test_a.csv'))
-    # user_date_feature = pd.read_csv(os.path.join(flags.root_path, "userid_feature.csv"))
-    # user_date_feature = user_date_feature.set_index(["userid", "date_"])
-    # feed_date_feature = pd.read_csv(os.path.join(flags.root_path, "feedid_feature.csv"))
-    # feed_date_feature = feed_date_feature.set_index(["feedid", "date_"])
+    test = pd.read_csv(os.path.join(flags.root_path, 'test_b.csv'))
+    user_date_feature = pd.read_csv(os.path.join(flags.root_path, "userid_feature.csv"))
+    user_date_feature = user_date_feature.set_index(["userid", "date_"])
+    feed_date_feature = pd.read_csv(os.path.join(flags.root_path, "feedid_feature.csv"))
+    feed_date_feature = feed_date_feature.set_index(["feedid", "date_"])
 
     # join action sum
-    # data = data.join(feed_date_feature, on=["feedid", "date_"], how="left", rsuffix="_feed")
-    # data = data.join(user_date_feature, on=["userid", "date_"], how="left", rsuffix="_user")
-    # test["date_"] = 15
-    # test = test.join(feed_date_feature, on=["feedid", "date_"], how="left", rsuffix="_feed")
-    # test = test.join(user_date_feature, on=["userid", "date_"], how="left", rsuffix="_user")
-    # test = test.drop(columns=['date_'])
+    data = data.join(feed_date_feature, on=["feedid", "date_"], how="left", rsuffix="_feed")
+    data = data.join(user_date_feature, on=["userid", "date_"], how="left", rsuffix="_user")
+    test["date_"] = 15
+    test = test.join(feed_date_feature, on=["feedid", "date_"], how="left", rsuffix="_feed")
+    test = test.join(user_date_feature, on=["userid", "date_"], how="left", rsuffix="_user")
+    test = test.drop(columns=['date_'])
 
     # join feed info
     data = data.join(feed_info, on="feedid", how="left", rsuffix="_feed")
@@ -167,20 +163,24 @@ def load_data(flags):
     data[DENSE_FEATURES] = data[DENSE_FEATURES].astype(float)
     test[DENSE_FEATURES] = test[DENSE_FEATURES].fillna(0.)
     test[DENSE_FEATURES] = test[DENSE_FEATURES].astype(float)
-    # data[DENSE_FEATURES] = np.log(data[DENSE_FEATURES] + 1.0)
-    # test[DENSE_FEATURES] = np.log(test[DENSE_FEATURES] + 1.0)
+    data[DENSE_FEATURES] = np.log(data[DENSE_FEATURES] + 1.0)
+    test[DENSE_FEATURES] = np.log(test[DENSE_FEATURES] + 1.0)
 
     train = data[data['date_'] < 14]
     val = data[data['date_'] == 14]
 
     return train, val, test
 
+# from deepctr.layers.core import DNN, PredictionLayer
+from deepctr.layers.sequence import SequencePoolingLayer
+from deepctr.layers.utils import NoMask
+from own.v3.model.modules import *
 
 if __name__ == "__main__":
     interface()
     epochs = FLAGS.epochs
     batch_size = FLAGS.batch_size
-    # DENSE_FEATURES.extend(SUM_FEATURES)
+    DENSE_FEATURES.extend(SUM_FEATURES)
     statis = json.loads(json.load(open(os.path.join(FLAGS.root_path, 'statis.json'))))
 
     print('\033[32;1m[DATA]\033[0m start load data, please wait')
@@ -189,49 +189,32 @@ if __name__ == "__main__":
     data = pd.concat([train, val])
     if FLAGS.copy:
         train = data.copy()
-
     feature_names = SPARE_FEATURES + DENSE_FEATURES
-    sparse_feature_columns = [SparseFeat(feat, vocabulary_size=data[feat].max() + 1, embedding_dim=FLAGS.emb_dim) for feat in SPARE_FEATURES]
-    dense_feature_columns = [DenseFeat(feat, 1) for feat in DENSE_FEATURES]
-    word_feature_columns = [
-        VarLenSparseFeat(SparseFeat(feat, vocabulary_size=int(statis[feat + '_len']), embedding_dim=FLAGS.word_fea_dim),
-                         maxlen=FLAGS.word_fea_len) for feat in WORD_FEATURES]
-    tag_feature_columns = [
-        VarLenSparseFeat(SparseFeat(feat, vocabulary_size=int(statis[feat + '_len']), embedding_dim=FLAGS.tag_fea_dim),
-                         maxlen=FLAGS.tag_fea_len) for feat in TAG_FEATURES]
+
     # 为模型生成输入数据
-    train_model_input = {name: train[name] for name in feature_names}
-    val_model_input = {name: val[name] for name in feature_names}
-    userid_list = val['userid'].astype(str).tolist()
     test_model_input = {name: test[name] for name in feature_names}
 
     for feat in WORD_FEATURES + TAG_FEATURES:
-        train_model_input[feat] = np.array(list(train[feat].values))
-        val_model_input[feat] = np.array(list(val[feat].values))
         test_model_input[feat] = np.array(list(test[feat].values))
-
-    train_labels = [train[y].values for y in TARGET]
-    val_labels = [val[y].values for y in TARGET]
-
     print('\033[32;1m[DATA]\033[0m load data done, total cost {}'.format(time.strftime("%H:%M:%S", time.gmtime(float(time.time() - T)))))
     print('\033[32;1m[DATA]\033[0m data.shape {}, train.shape {}, val.shape {}, test.shape {}, \n'.format(data.shape, train.shape, val.shape, test.shape))
 
-    input_feature_columns = sparse_feature_columns + dense_feature_columns + word_feature_columns + tag_feature_columns
+    custom_ob = {'SequencePoolingLayer': SequencePoolingLayer, 'NoMask': NoMask, 'MemoryLayer': MemoryLayer(),
+                 'ConvLayer': ConvLayer, 'DNN': DNN, 'CGCLayer': CGCLayer, 'PredictionLayer': PredictionLayer}
     # 定义模型并训练
-    train_model = Model(input_feature_columns, num_tasks=4, tasks=['binary', 'binary', 'binary', 'binary'], flags=FLAGS)
-    train_model.compile("adagrad", loss='binary_crossentropy', loss_weights=[1.1, 1, 1, 1])
-    highest_auc = 0.0
-    for epoch in range(epochs):
-        print('\033[32;1m[EPOCH]\033[0m {}/{}'.format(epoch+1, epochs))
-        history = train_model.fit(train_model_input, train_labels,
-                                  batch_size=batch_size, epochs=1, verbose=1)
-
-        val_pred_ans = train_model.predict(val_model_input, batch_size=batch_size * 4)
-        val_auc = evaluate_deepctr(val_labels, val_pred_ans, userid_list, TARGET)
-        if val_auc > highest_auc:
-            highest_auc = val_auc
-
-    print('\033[32;1m[EVAL]\033[0m 验证集最高AUC: \033[31;4m{}\033[0m '.format(highest_auc))
+    train_model = tf.keras.models.load_model('./ckpt/0.77804_1624965887.h5', custom_objects=custom_ob)
+    # train_model.compile("adagrad", loss='binary_crossentropy')
+    # highest_auc = 0.0
+    # for epoch in range(epochs):
+    #     print('\033[32;1m[EPOCH]\033[0m {}/{}'.format(epoch+1, epochs))
+    #     history = train_model.fit(train_model_input, train_labels,
+    #                               batch_size=batch_size, epochs=1, verbose=1)
+    #
+    #     val_pred_ans = train_model.predict(val_model_input, batch_size=batch_size * 4)
+    #     val_auc = evaluate_deepctr(val_labels, val_pred_ans, userid_list, TARGET)
+    #     if val_auc > highest_auc:
+    #         highest_auc = val_auc
+    # print('\033[32;1m[EVAL]\033[0m 验证集最高AUC: \033[31;4m{}\033[0m '.format(highest_auc))
     t1 = time.time()
     pred_ans = train_model.predict(test_model_input, batch_size=batch_size * 20)
     t2 = time.time()
@@ -239,12 +222,13 @@ if __name__ == "__main__":
     ts = (t2 - t1) * 1000.0 / len(test) * 2000.0
     print('\033[32;1m[Time]\033[0m 4个目标行为2000条样本平均预测耗时（毫秒）：{:.3f}'.format(ts))
 
+    timestamp = str(int(time.time()))
     # 生成提交文件
     if FLAGS.submit:
         for i, action in enumerate(TARGET):
             test[action] = pred_ans[i]
-        file_name = "./submit/submit_" + str(int(time.time())) + ".csv"
+        file_name = "./submit/a_" + timestamp + ".csv"
         test[['userid', 'feedid'] + TARGET].to_csv(file_name, index=None, float_format='%.6f')
         print('\033[32;1m[FILE]\033[0m save to {}'.format(file_name))
-
+    # train_model.save('./ckpt/{}_{}.h5'.format(highest_auc, timestamp))
     print_end(FLAGS)

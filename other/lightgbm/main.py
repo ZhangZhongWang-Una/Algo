@@ -160,7 +160,7 @@ for y in y_list:
 
 ## 读取测试集
 
-test = pd.read_csv('../../data/origin/test_a.csv')
+test = pd.read_csv('../../data/origin/test_b.csv')
 
 test['date_'] = max_day
 
@@ -339,6 +339,9 @@ df = reduce_mem(df, [f for f in df.columns if f not in ['date_'] + play_cols + y
 train = df[~df['read_comment'].isna()].reset_index(drop=True)
 
 test = df[df['read_comment'].isna()].reset_index(drop=True)
+
+train.to_csv('../../data/v2/train.csv', index=False)
+test.to_csv('../../data/v2/test_b.csv', index=False)
 
 
 
