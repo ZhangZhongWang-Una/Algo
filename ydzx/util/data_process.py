@@ -169,10 +169,11 @@ def process_doc_info():
 def process_test_sample():
     print('Start create test sample')
     data_path = os.path.join(ROOT_PATH, 'v1/train_data.csv')
-    train_data = pd.read_csv(data_path, sep='\t', header=None,
-                             names=['userId', 'docId', 'showTime', 'network', 'refreshNum', 'loc', 'isClick','consumeTime'])
+    train_data = pd.read_csv(data_path)
+    # train_data = pd.read_csv(data_path, sep='\t', header=None,
+    #                          names=['userId', 'docId', 'showTime', 'network', 'refreshNum', 'loc', 'isClick','consumeTime'])
     num_samples = len(train_data)
-    samples_random = np.random.choice(num_samples, size=int(0.05 * num_samples), replace=False)
+    samples_random = np.random.choice(num_samples, size=int(0.005 * num_samples), replace=False)
     samples_idx = np.zeros(num_samples, dtype=bool)
     samples_idx[samples_random] = True
     samples = train_data[samples_idx]
