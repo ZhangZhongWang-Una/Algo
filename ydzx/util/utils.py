@@ -12,10 +12,10 @@ import tensorflow as tf
 
 
 def load_data(root_path, keyword_length):
-    # data = pd.read_csv(os.path.join(root_path, 'train_data_sample.csv'))
-    data = pd.read_csv(os.path.join(root_path, 'train_data.csv'))
+    data = pd.read_csv(os.path.join(root_path, 'train_data_sample.csv'))
+    # data = pd.read_csv(os.path.join(root_path, 'train_data.csv'))
+    # data = pd.read_csv(os.path.join(root_path, 'train_data_part.csv'))
     # data = pd.read_hdf(os.path.join(root_path, 'train_data.h5'), key='traindata', dtype=int)
-
 
     # 用户信息
     user_info = pd.read_csv(os.path.join(root_path, 'user_info.csv'))

@@ -181,6 +181,19 @@ def process_test_sample():
     print('Sample create success \n')
 
 
+def process_sample_just_in_test_data():
+    print('Start split train sample which is in test data')
+    train_data = pd.read_csv(os.path.join(ROOT_PATH, 'v1/train_data.csv'))
+    test_data = pd.read_csv(os.path.join(ROOT_PATH, 'v1/test_data.csv'))
+
+    userId = set(test_data['userId'].tolist())
+    docId = set(test_data['docId'].tolist())
+
+    train_part = train_data[train_data['userId'].isin(userId) | train_data['docId'].isin(docId)]
+    train_part.to_csv(os.path.join(ROOT_PATH, 'v1/train_data_part.csv'), index=False)
+    print('Sample split success \n')
+
+
 def id2map():
     print('Start id to map')
     user_info = pd.read_csv(USER_INFO, sep='\t', header=None, names=['userId', 'device', 'os', 'province', 'city', 'age', 'sex'])
@@ -232,10 +245,42 @@ def csv2hdf5():
     print('Change success \n')
 
 
+def count_para_num():
+    print('Count para num')
+    dic = {}
+    train_data = pd.read_csv(os.path.join(ROOT_PATH, 'v1/train_data.csv'), dtype=int)
+    dic['network'] = train_data['network'].nunique()
+
+    user_info = pd.read_csv(os.path.join(ROOT_PATH, 'v1/user_info.csv'))
+    dic['device'] = user_info['device'].nunique()
+    dic['os'] = user_info['os'].nunique()
+    dic['province'] = user_info['province'].nunique()
+    dic['city'] = user_info['city'].nunique()
+    dic['age'] = user_info['age'].nunique()
+    dic['sex'] = user_info['sex'].nunique()
+
+    doc_info = pd.read_csv(os.path.join(ROOT_PATH, 'v1/doc_info.csv'))
+    dic['c1'] = doc_info['c1'].nunique()
+
+    test_data = pd.read_csv(os.path.join(ROOT_PATH, 'v1/test_data.csv'))
+
+    user_list = list(train_data['userId'].unique()) + list(test_data['userId'].unique()) + list(user_info['userId'].unique())
+    user_set = set(user_list)
+    doc_list = list(train_data['docId'].unique()) + list(test_data['docId'].unique()) + list(doc_info['docId'].unique())
+    doc_set = set(doc_list)
+
+    dic['user'] = len(user_set)
+    dic['doc'] = len(doc_set)
+    np.save(os.path.join(ROOT_PATH, 'v1/para.npy'), dic)
+    print('Count success \n')
+
+
 if __name__ == '__main__':
     # process_user_info()
     # process_doc_info()
     # process_test_sample()
     # id2map()
-    csv2hdf5()
+    # csv2hdf5()
+    # count_para_num()
+    process_sample_just_in_test_data()
     # print(1)

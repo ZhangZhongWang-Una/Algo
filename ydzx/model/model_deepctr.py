@@ -1,6 +1,7 @@
 import tensorflow.python.keras as keras
 import tensorflow as tf
 import tensorflow.python.keras.backend as K
+from deepctr.feature_column import build_input_features, input_from_feature_columns
 from tensorflow.python.keras.initializers import zeros, random_normal, truncated_normal, constant, glorot_normal
 from tensorflow.python.keras.layers import Layer, Embedding, Input, Dense, BatchNormalization,\
     Activation, Conv1D, GlobalAveragePooling1D,subtract, maximum, add, Dropout, multiply
@@ -51,7 +52,7 @@ class MemoryLayer(Layer):
 
     def call(self, inputs, **kwargs):
         # inputs = self.batchNormal(inputs)
-        inputs = tf.squeeze(inputs, axis=1)
+        # inputs = tf.squeeze(inputs, axis=1)
         att_key = tf.tensordot(inputs, self.key, axes=(-1, 0))
         att_mem = softmax(att_key)
         mem = tf.tensordot(att_mem, self.mem, axes=(-1, 0))
@@ -64,36 +65,10 @@ class MemoryLayer(Layer):
 
 def Model(input_feature_columns, args, num_users, num_items):
     print('\033[32;1m[MODEL]\033[0m Model_base.py \n')
-    # input layer
-    input_user_id = Input(shape=(1,), name='input_user_id')
-    input_item_id = Input(shape=(1,), name='input_item_id')
-    # embedding layer
-    user_embeddings = Embedding(num_users,
-                                args.emb_dim,
-                                name='user_id_embeddings',
-                                embeddings_initializer=random_normal(mean=0, stddev=0.02),
-                                embeddings_regularizer=l2(args.l2))
-    item_embeddings = Embedding(num_items,
-                                args.emb_dim,
-                                name='item_id_embeddings',
-                                embeddings_initializer=random_normal(mean=0, stddev=0.02),
-                                embeddings_regularizer=l2(args.l2))
-
-    user_bias_embeddings = Embedding(num_users,
-                                     1,
-                                     name='user_bias_embeddings',
-                                     embeddings_initializer=random_normal(mean=0, stddev=0.02),
-                                     embeddings_regularizer=l2(args.l2))
-    item_bias_embeddings = Embedding(num_items,
-                                     1,
-                                     name='item_bias_embeddings',
-                                     embeddings_initializer=random_normal(mean=0, stddev=0.02),
-                                     embeddings_regularizer=l2(args.l2))
-    user_id_embeds = user_embeddings(input_user_id)
-    item_id_embeds = item_embeddings(input_item_id)
-    user_bias = user_bias_embeddings(input_user_id)
-    item_bias = item_bias_embeddings(input_item_id)
-    emb_out = concat_func([user_id_embeds, item_id_embeds], axis=-1)
+    features = build_input_features(input_feature_columns)
+    inputs_list = list(features.values())
+    sparse_embedding_list, dense_value_list = input_from_feature_columns(features, input_feature_columns, '1e-5', args.seed)
+    emb_out = combined_dnn_input(sparse_embedding_list, dense_value_list)
 
     # 交互层
     mem_out = MemoryLayer(memory_size=args.mem_size)(emb_out)
@@ -104,7 +79,7 @@ def Model(input_feature_columns, args, num_users, num_items):
     output = PredictionLayer('binary')(logit)
 
     model = keras.models.Model(
-        inputs=[input_user_id, input_item_id],
+        inputs=inputs_list,
         outputs=output,
         name='model_drsn'
     )

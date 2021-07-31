@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.ERROR)
 warnings.filterwarnings('ignore')
 import tensorflow as tf
 from deepctr.feature_column import SparseFeat, DenseFeat, get_feature_names, VarLenSparseFeat
-from ydzx.util.utils import load_data, time, evaluate, auc
+from ydzx.util.utils import load_data, time, evaluate, auc, np
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 flags = tf.compat.v1.app.flags
@@ -20,15 +20,14 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_integer('epochs', 2, 'epochs')
 flags.DEFINE_integer('batch_size', 512, 'batch size')
-flags.DEFINE_integer('emb_dim', 16, 'embeddings dim')
-flags.DEFINE_integer('expert_dim', 8, 'MMOE expert dim')
+flags.DEFINE_integer('entity_dim', 16, 'id embeddings dim')
+flags.DEFINE_integer('emb_dim', 4, 'sparse embeddings dim')
 flags.DEFINE_integer('conv_dim', 64, 'conv layer dim')
 flags.DEFINE_integer('dnn1', 128, 'dnn_hidden_units in layer 1')
 flags.DEFINE_integer('dnn2', 128, 'dnn_hidden_units in layer 2')
-flags.DEFINE_integer('expert_num', 4, 'MMOE expert num')
 flags.DEFINE_integer('mem_size', 8, 'memory layer mem size')
-flags.DEFINE_integer('day', 1, 'train dataset day select from ? to 14')
-flags.DEFINE_integer('model', 1, 'which model to select')
+
+flags.DEFINE_integer('model', 2, 'which model to select')
 flags.DEFINE_integer('seed', 2021, 'seed')
 flags.DEFINE_float('dropout', 0.0, 'dnn_dropout')
 flags.DEFINE_float('l2', 0.00, 'l2 reg')
@@ -46,44 +45,83 @@ sess = tf.Session(config=config)
 
 if 1 == FLAGS.model:
     from ydzx.model.model_base import Model
+elif 2== FLAGS.model:
+    from ydzx.model.model_deepctr import Model
 else:
     raise Exception('Unknown model:', FLAGS.model)
+
+SPARSE_FEATURES = []
+DENSE_FEATURES = []
+
+
+def interface():
+    print('\033[32;1m' + '=' * 86 + '\033[0m \n')
+    print('\033[32;1mSelect sparse features \033[0m ')
+    print('-' * 86)
+    print('0. all             1. none        2. user_os           3. user_province     4. user_city')
+    print('5. user_age        6. user_sex    7. doc_c1            8. train_network     9. user_device')
+    orderA = input('please enter the num of sparse features to choice it:')
+    if '0' == orderA:
+        SPARSE_FEATURES.extend(['device', 'os', 'province', 'city', 'age', 'sex', 'c1', 'network'])
+    elif '1' == orderA:
+        una = 857
+    else:
+        order = orderA.split(',')
+        sparse_dic = {'9': 'device', '2': 'os', '3': 'province', '4': 'city', '5': 'age', '6': 'sex', '7': 'c1', '8': 'network'}
+        for o in order:
+            SPARSE_FEATURES.append(sparse_dic[o])
+
+    print('\033[32;1mSelect dense features \033[0m ')
+    print('-' * 86)
+    print('0. all             1. none        2. photoNum          3. doc_c2            4. refreshNum')
+
+    orderB = input('please enter the num of dense features to choice it:')
+    if '5' == orderB:
+        DENSE_FEATURES.extend(['photoNum', 'c2', 'refreshNum'])
+    elif '6' == orderB:
+        una = 857
+    else:
+        order = orderB.split(',')
+        dense_dic = {'2': 'photoNum', '3': 'c2', '4': 'showTime'}
+        for o in order:
+            DENSE_FEATURES.append(dense_dic[o])
 
 
 def create_input_data():
     print('\033[32;1m[DATA]\033[0m start load data, please wait')
     T = time.time()
+
+    # 加载数据
     train, val, test = load_data(root_path=FLAGS.root_path, keyword_length=10)
     print('\033[32;1m[DATA]\033[0m load data done, total cost {}'.format(time.strftime("%H:%M:%S", time.gmtime(float(time.time() - T)))))
     print('\033[32;1m[DATA]\033[0m train.shape {}, val.shape {}, test.shape {}, \n'.format(train.shape, val.shape, test.shape))
 
-    # user2Id = np.load(os.path.join(FLAGS.root_path, 'user2id.npy'), allow_pickle=True).item()
-    # doc2Id = np.load(os.path.join(FLAGS.root_path, 'doc2id.npy'), allow_pickle=True).item()
-    # num_users = len(user2Id)
-    # num_items = len(doc2Id)
-
     print('\033[32;1m[DATA]\033[0m start create input data, please wait')
     T = time.time()
-    train_model_input = {}
-    train_model_input['input_user_id'] = train['userId']
-    train_model_input['input_item_id'] = train['docId']
-    train_labels = train['isClick'].values
+    para = np.load(os.path.join(FLAGS.root_path, 'para1.npy'), allow_pickle=True).item()
 
-    val_model_input = {}
-    val_model_input['input_user_id'] = val['userId']
-    val_model_input['input_item_id'] = val['docId']
+    # 构造特征嵌入
+    sparse_feature_columns = [SparseFeat(feat, vocabulary_size=para[feat], embedding_dim=FLAGS.entity_dim) for feat in ['userId', 'docId']] \
+                             + [SparseFeat(feat, vocabulary_size=para[feat], embedding_dim=FLAGS.emb_dim) for feat in SPARSE_FEATURES]
+    dense_feature_columns = [DenseFeat(feat, 1) for feat in DENSE_FEATURES]
+    input_feature_columns = sparse_feature_columns + dense_feature_columns
+
+    # 为模型生成输入数据
+    feature_names = ['userId', 'docId'] + SPARSE_FEATURES + DENSE_FEATURES
+    train_model_input = {name: train[name] for name in feature_names}
+    val_model_input = {name: val[name] for name in feature_names}
+    test_model_input = {name: test[name] for name in feature_names}
+
+    train_labels = train['isClick'].values
     val_labels = val['isClick'].values
 
-    test_model_input = {}
-    test_model_input['input_user_id'] = test['userId']
-    test_model_input['input_item_id'] = test['docId']
     print('\033[32;1m[DATA]\033[0m data create done, total cost {} \n'.format(time.strftime("%H:%M:%S", time.gmtime(float(time.time() - T)))))
 
-    return train_model_input, val_model_input, test_model_input, train_labels, val_labels, test
+    return train_model_input, val_model_input, test_model_input, train_labels, val_labels, test, input_feature_columns
 
 
 if __name__ == "__main__":
-    print('\033[32;1m' + '=' * 86 + '\033[0m \n')
+    interface()
     epochs = FLAGS.epochs
     batch_size = FLAGS.batch_size
     embedding_dim = FLAGS.emb_dim
@@ -92,10 +130,10 @@ if __name__ == "__main__":
     num_users = 1538384
     num_items = 633391
 
-    train_model_input, val_model_input, test_model_input, train_labels, val_labels, test = create_input_data()
+    train_model_input, val_model_input, test_model_input, train_labels, val_labels, test, input_feature_columns = create_input_data()
 
     # 定义模型并训练
-    train_model = Model(args=FLAGS, num_users=num_users, num_items=num_items)
+    train_model = Model(input_feature_columns, args=FLAGS, num_users=num_users, num_items=num_items)
     train_model.compile(optimizer="adagrad", loss='binary_crossentropy', metrics=[auc])
     highest_auc = 0.0
     for epoch in range(epochs):
