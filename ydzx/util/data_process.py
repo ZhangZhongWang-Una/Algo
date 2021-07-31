@@ -225,9 +225,17 @@ def id2map():
     print('Map success \n')
 
 
+def csv2hdf5():
+    print('Train data csv to hdf5')
+    train_data = pd.read_csv(os.path.join(ROOT_PATH, 'v1/train_data.csv'), dtype=int)
+    train_data.to_hdf(os.path.join(ROOT_PATH, 'v1/train_data.h5'), key='traindata')
+    print('Change success \n')
+
+
 if __name__ == '__main__':
     # process_user_info()
     # process_doc_info()
-    process_test_sample()
+    # process_test_sample()
     # id2map()
+    csv2hdf5()
     # print(1)

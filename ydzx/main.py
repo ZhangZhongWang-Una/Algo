@@ -77,11 +77,9 @@ def create_input_data():
     test_model_input = {}
     test_model_input['input_user_id'] = test['userId']
     test_model_input['input_item_id'] = test['docId']
-    test_labels = test['isClick'].values
-    user_id_list = test['userId'].astype(str).tolist()
     print('\033[32;1m[DATA]\033[0m data create done, total cost {} \n'.format(time.strftime("%H:%M:%S", time.gmtime(float(time.time() - T)))))
 
-    return train_model_input, val_model_input, test_model_input, train_labels, val_labels, test_labels, user_id_list
+    return train_model_input, val_model_input, test_model_input, train_labels, val_labels, test
 
 
 if __name__ == "__main__":
@@ -94,7 +92,7 @@ if __name__ == "__main__":
     num_users = 1538384
     num_items = 633391
 
-    train_model_input, val_model_input, test_model_input, train_labels, val_labels, test_labels, user_id_list = create_input_data()
+    train_model_input, val_model_input, test_model_input, train_labels, val_labels, test = create_input_data()
 
     # 定义模型并训练
     train_model = Model(args=FLAGS, num_users=num_users, num_items=num_items)
@@ -105,13 +103,18 @@ if __name__ == "__main__":
         _ = train_model.fit(train_model_input, train_labels, batch_size=batch_size, epochs=1, verbose=1, shuffle=True)
 
         _, val_auc = train_model.evaluate(val_model_input, val_labels, batch_size=batch_size * 4, verbose=1)
-        pred_ans = train_model.predict(test_model_input, batch_size=batch_size * 4, verbose=1)
-        test_auc = evaluate(test_labels, pred_ans, user_id_list)
-        print(
-            '\033[32;1m[Evaluates]\033[0m AUC:\033[31;4m{:.4f}\033[0m \n'.format(test_auc))
         if val_auc > highest_auc:
             highest_auc = val_auc
     print('\033[32;1m[EVAL]\033[0m 验证集最高AUC: \033[31;4m{}\033[0m '.format(highest_auc))
 
     # 生成预测文件
     pred_ans = train_model.predict(test_model_input, batch_size=batch_size * 20)
+    timestamp = str(int(time.time()))
+
+    # 生成提交文件
+    if FLAGS.submit:
+        test['isClick'] = pred_ans
+        file_name = "./submit/submit_" + timestamp + ".csv"
+        test[['id', 'isClick']].to_csv(file_name, index=None, float_format='%.6f')
+        print('\033[32;1m[FILE]\033[0m save to {}'.format(file_name))
+    # train_model.save('./ckpt/{}_{}.h5'.format(highest_auc, timestamp))

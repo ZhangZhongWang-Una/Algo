@@ -12,7 +12,10 @@ import tensorflow as tf
 
 
 def load_data(root_path, keyword_length):
-    data = pd.read_csv(os.path.join(root_path, 'train_data_sample.csv'))
+    # data = pd.read_csv(os.path.join(root_path, 'train_data_sample.csv'))
+    data = pd.read_csv(os.path.join(root_path, 'train_data.csv'))
+    # data = pd.read_hdf(os.path.join(root_path, 'train_data.h5'), key='traindata', dtype=int)
+
 
     # 用户信息
     user_info = pd.read_csv(os.path.join(root_path, 'user_info.csv'))
@@ -30,24 +33,20 @@ def load_data(root_path, keyword_length):
     data = data.join(doc_info, on='docId', how='left', rsuffix='_doc')
 
     data = data.fillna(0)
-
-    # 划分百分之20作为验证集和测试集
+    np.random.seed(2021)
+    # 划分百分之20作为验证集
     num_samples = len(data)
-    test_valid = np.random.choice(num_samples, size=int(0.20 * num_samples), replace=False)
-    test_valid_idx = np.zeros(num_samples, dtype=bool)
-    test_valid_idx[test_valid] = True
-    data_test_valid = data[test_valid_idx]
-    train = data[~test_valid_idx]
+    valid = np.random.choice(num_samples, size=int(0.20 * num_samples), replace=False)
+    valid_idx = np.zeros(num_samples, dtype=bool)
+    valid_idx[valid] = True
+    val = data[valid_idx]
+    train = data[~valid_idx]
 
-    # 验证集测试集各百分之10
-    num_test_valid = len(data_test_valid)
-    test = np.random.choice(num_test_valid, size=int(0.50 * num_test_valid), replace=False)
-    test_idx = np.zeros(num_test_valid, dtype=bool)
-    test_idx[test] = True
-    valid = data_test_valid[~test_idx]
-    test = data_test_valid[test_idx]
+    test = pd.read_csv(os.path.join(root_path, 'test_data.csv'))
+    test = test.join(user_info, on='userId', how='left', rsuffix='_user')
+    test = test.join(doc_info, on='docId', how='left', rsuffix='_doc')
 
-    return train, valid, test
+    return train, val, test
 
 
 
