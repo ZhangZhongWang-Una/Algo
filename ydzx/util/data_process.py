@@ -10,6 +10,7 @@ logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 logger = logging.getLogger(__file__)
 import numpy as np
 import pandas as pd
+import thulac
 
 ROOT_PATH = "../../data/ydzx/"
 USER_INFO = os.path.join(ROOT_PATH, "origin/user_info_origin.txt")
@@ -166,6 +167,105 @@ def process_doc_info():
     print('Doc_info process success \n')
 
 
+def process_doc_info_keyword_title():
+    print('Start process doc_info\'s keyword and title')
+    new_doc_info = pd.read_csv(os.path.join(ROOT_PATH, 'v1/doc_info.csv'))
+
+    doc_info = pd.read_csv(DOC_INFO, sep='\t', header=None,
+                           names=['docId', 'title', 'pushTime', 'photoNum', 'c1', 'c2', 'keyword'])
+    doc_info = doc_info.fillna('nan')[['title', 'keyword']]
+
+    para = np.load(os.path.join(ROOT_PATH, 'v1/para1.npy'), allow_pickle=True).item()
+    para.pop('user')
+    para.pop('doc')
+
+    # process keyword
+    keyword_set = ['nan']
+    for row in tqdm(doc_info['keyword'], desc='keyword_set', total=len(doc_info['keyword']), leave=True, unit='row'):
+        if 'nan' == row:
+            continue
+        row = row.replace("^^,^^", "^^^^")
+        row = row.replace("^^:^^", "^^^^")
+        row = row.replace("数码宝贝^^大冒险^^:", "数码宝贝^^大冒险^^")
+        keyword_set.extend(re.split(r'[:,]', row)[::2])
+    keyword_set = set(keyword_set)
+    keyword_set.remove('nan')
+
+    keyword2id = {'nan': 0}
+    keyword2id.update(dict((id, i + 1) for (i, id) in enumerate(keyword_set)))
+    para['keyword'] = len(keyword2id)
+    new_keyword = []
+    for row in tqdm(doc_info['keyword'], desc='keyword_map', total=len(doc_info['keyword']), leave=True, unit='row'):
+        if 'nan' == row:
+            new_keyword.append(keyword2id[row])
+            continue
+
+        # keyword_list = re.split(r'[:,]', row)[::2]
+        row = row.replace("^^,^^", "^^^^")
+        row = row.replace("^^:^^", "^^^^")
+        row = row.replace("数码宝贝^^大冒险^^:", "数码宝贝^^大冒险^^")
+        keyword_TFIDF_list = re.split(r'[:,]', row)
+        keyword_list = keyword_TFIDF_list[::2]
+        TFIDF_list = keyword_TFIDF_list[1::2]
+        keyword2TFIDF = {a: float(b) for a, b in zip(keyword_list, TFIDF_list)}
+        keyword_list = sorted(keyword_list, key=lambda a: keyword2TFIDF[a], reverse=True)
+        tmp1 = list((keyword2id[keyword] for keyword in keyword_list))
+        new_keyword.append(tmp1)
+    new_doc_info['keyword'] = new_keyword
+
+    # process title
+    thu = thulac.thulac(seg_only=True)  # 只进行分词，不进行词性标注
+    title = []
+    word_set = ['nan']
+    for row in tqdm(doc_info['title'], desc='title_set', total=len(doc_info['title']), leave=True, unit='row'):
+        if 'nan' == row:
+            title.append([])
+            continue
+        word = thu.cut(row, text=True).split(' ')
+        title.append(word)
+        word_set.extend(word)
+    word_set = set(word_set)
+    word_set.remove('nan')
+
+    word2id = {'nan': 0}
+    word2id.update(dict((id, i + 1) for (i, id) in enumerate(word_set)))
+    para['title'] = len(word2id)
+
+    new_title = []
+    for row in tqdm(title, desc='title_map', total=len(title), leave=True, unit='row'):
+        if 0 == len(row):
+            new_title.append([0])
+            continue
+        tmp1 = list((word2id[word] for word in row))
+        new_title.append(tmp1)
+    new_doc_info['title'] = new_title
+
+    new_doc_info.to_csv(os.path.join(ROOT_PATH, 'v1/doc_info_new.csv'), index=False)
+    np.save(os.path.join(ROOT_PATH, 'v1/para.npy'), para)
+    print('Doc_info process success \n')
+
+
+def clean_str(string):
+    """
+    Tokenization/string cleaning for all datasets except for SST.
+    Original taken from https://github.com/yoonkim/CNN_sentence/blob/master/process_data.py
+    """
+    string = re.sub(r"[^A-Za-z]", " ", string)
+    string = re.sub(r"\'s", " \'s", string)
+    string = re.sub(r"\'ve", " \'ve", string)
+    string = re.sub(r"n\'t", " n\'t", string)
+    string = re.sub(r"\'re", " \'re", string)
+    string = re.sub(r"\'d", " \'d", string)
+    string = re.sub(r"\'ll", " \'ll", string)
+    string = re.sub(r",", " , ", string)
+    string = re.sub(r"!", " ! ", string)
+    string = re.sub(r"\(", " \( ", string)
+    string = re.sub(r"\)", " \) ", string)
+    string = re.sub(r"\?", " \? ", string)
+    string = re.sub(r"\s{2,}", " ", string)
+    return string.strip().lower()
+
+
 def process_test_sample():
     print('Start create test sample')
     data_path = os.path.join(ROOT_PATH, 'v1/train_data.csv')
@@ -282,5 +382,6 @@ if __name__ == '__main__':
     # id2map()
     # csv2hdf5()
     # count_para_num()
-    process_sample_just_in_test_data()
+    # process_sample_just_in_test_data()
+    process_doc_info_keyword_title()
     # print(1)

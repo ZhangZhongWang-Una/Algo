@@ -11,7 +11,7 @@ from tensorflow.python.keras import backend as K
 import tensorflow as tf
 
 
-def load_data(root_path, keyword_length):
+def load_data(root_path, keyword_length, val_features):
     data = pd.read_csv(os.path.join(root_path, 'train_data_sample.csv'))
     # data = pd.read_csv(os.path.join(root_path, 'train_data.csv'))
     # data = pd.read_csv(os.path.join(root_path, 'train_data_part.csv'))
@@ -25,12 +25,32 @@ def load_data(root_path, keyword_length):
     # 文章信息
     doc_info = pd.read_csv(os.path.join(root_path, 'doc_info.csv'))
     doc_info = doc_info.set_index('docId')
-    # genres_list = list()
-    # for row in tqdm(doc_info['keyword'], desc='keyword', total=len(doc_info['keyword']), leave=True, unit='row'):
-    #     genres_list.append(json.loads(row))
-    #
-    # doc_info['keyword'] = list(pad_sequences(genres_list, maxlen=keyword_length, padding='post',))
+
+    if 'keyword' in val_features:
+        genres_list = []
+        for row in tqdm(doc_info['keyword'], desc='keyword', total=len(doc_info['keyword']), leave=True, unit='row'):
+            if '0' == row:
+                genres_list.append([])
+            else:
+                genres_list.append(eval(row))
+
+        doc_info['keyword'] = list(
+            pad_sequences(list(genres_list), maxlen=keyword_length, padding='post', truncating='post'))
+
+    if 'title' in val_features:
+        genres_list = []
+        for row in tqdm(doc_info['title'], desc='title', total=len(doc_info['title']), leave=True, unit='row'):
+                genres_list.append(eval(row))
+
+        doc_info['title'] = list(
+            pad_sequences(list(genres_list), maxlen=keyword_length, padding='post', truncating='post'))
+
     data = data.join(doc_info, on='docId', how='left', rsuffix='_doc')
+    pad = pad_sequences([[]], maxlen=keyword_length, padding='post', truncating='post')[0]
+    L = sum(data["keyword"].isnull())
+    data["keyword"][data["keyword"].isnull()] = [pd.Series([pad])] * L
+    L = sum(data["title"].isnull())
+    data["title"][data["title"].isnull()] = [pd.Series([pad])] * L
 
     data = data.fillna(0)
     np.random.seed(2021)

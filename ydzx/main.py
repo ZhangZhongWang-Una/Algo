@@ -26,6 +26,11 @@ flags.DEFINE_integer('conv_dim', 64, 'conv layer dim')
 flags.DEFINE_integer('dnn1', 128, 'dnn_hidden_units in layer 1')
 flags.DEFINE_integer('dnn2', 128, 'dnn_hidden_units in layer 2')
 flags.DEFINE_integer('mem_size', 8, 'memory layer mem size')
+flags.DEFINE_integer('val_dim', 8, 'memory layer mem size')
+flags.DEFINE_integer('val_len', 20, 'memory layer mem size')
+flags.DEFINE_integer('expert_num', 4, 'MMOE expert num')
+flags.DEFINE_integer('expert_dim', 16, 'MMOE expert dim')
+
 
 flags.DEFINE_integer('model', 2, 'which model to select')
 flags.DEFINE_integer('seed', 2021, 'seed')
@@ -45,13 +50,16 @@ sess = tf.Session(config=config)
 
 if 1 == FLAGS.model:
     from ydzx.model.model_base import Model
-elif 2== FLAGS.model:
+elif 2 == FLAGS.model:
     from ydzx.model.model_deepctr import Model
+elif 3 == FLAGS.model:
+    from ydzx.model.model_mmoe import Model
 else:
     raise Exception('Unknown model:', FLAGS.model)
 
 SPARSE_FEATURES = []
 DENSE_FEATURES = []
+VAL_FEATURES = []
 
 
 def interface():
@@ -76,9 +84,9 @@ def interface():
     print('0. all             1. none        2. photoNum          3. doc_c2            4. refreshNum')
 
     orderB = input('please enter the num of dense features to choice it:')
-    if '5' == orderB:
+    if '0' == orderB:
         DENSE_FEATURES.extend(['photoNum', 'c2', 'refreshNum'])
-    elif '6' == orderB:
+    elif '1' == orderB:
         una = 857
     else:
         order = orderB.split(',')
@@ -86,31 +94,53 @@ def interface():
         for o in order:
             DENSE_FEATURES.append(dense_dic[o])
 
+    print('\033[32;1mSelect keyword features \033[0m ')
+    print('-' * 86)
+    print('0. yes             1. no')
+    orderC = input('please enter the num to choice it:')
+    if '0' == orderC:
+        VAL_FEATURES.append('keyword')
+
+    print('\033[32;1mSelect title features \033[0m ')
+    print('-' * 86)
+    print('0. yes             1. no')
+    orderD = input('please enter the num to choice it:')
+    if '0' == orderD:
+        VAL_FEATURES.append('title')
+
 
 def create_input_data():
     print('\033[32;1m[DATA]\033[0m start load data, please wait')
     T = time.time()
 
     # 加载数据
-    train, val, test = load_data(root_path=FLAGS.root_path, keyword_length=10)
+    train, val, test = load_data(root_path=FLAGS.root_path, keyword_length=FLAGS.val_len, val_features=VAL_FEATURES)
     print('\033[32;1m[DATA]\033[0m load data done, total cost {}'.format(time.strftime("%H:%M:%S", time.gmtime(float(time.time() - T)))))
     print('\033[32;1m[DATA]\033[0m train.shape {}, val.shape {}, test.shape {}, \n'.format(train.shape, val.shape, test.shape))
 
     print('\033[32;1m[DATA]\033[0m start create input data, please wait')
     T = time.time()
-    para = np.load(os.path.join(FLAGS.root_path, 'para1.npy'), allow_pickle=True).item()
+    para = np.load(os.path.join(FLAGS.root_path, 'para.npy'), allow_pickle=True).item()
 
     # 构造特征嵌入
     sparse_feature_columns = [SparseFeat(feat, vocabulary_size=para[feat], embedding_dim=FLAGS.entity_dim) for feat in ['userId', 'docId']] \
                              + [SparseFeat(feat, vocabulary_size=para[feat], embedding_dim=FLAGS.emb_dim) for feat in SPARSE_FEATURES]
     dense_feature_columns = [DenseFeat(feat, 1) for feat in DENSE_FEATURES]
-    input_feature_columns = sparse_feature_columns + dense_feature_columns
+    val_feature_columns = [
+        VarLenSparseFeat(SparseFeat(feat, vocabulary_size=para[feat], embedding_dim=FLAGS.val_dim),
+                         maxlen=FLAGS.val_len) for feat in VAL_FEATURES]
+    input_feature_columns = sparse_feature_columns + dense_feature_columns + val_feature_columns
 
     # 为模型生成输入数据
-    feature_names = ['userId', 'docId'] + SPARSE_FEATURES + DENSE_FEATURES
+    feature_names = ['userId', 'docId'] + SPARSE_FEATURES + DENSE_FEATURES + VAL_FEATURES
     train_model_input = {name: train[name] for name in feature_names}
     val_model_input = {name: val[name] for name in feature_names}
     test_model_input = {name: test[name] for name in feature_names}
+
+    for feat in VAL_FEATURES:
+        train_model_input[feat] = np.array(list(train[feat].values))
+        val_model_input[feat] = np.array(list(val[feat].values))
+        test_model_input[feat] = np.array(list(test[feat].values))
 
     train_labels = train['isClick'].values
     val_labels = val['isClick'].values
@@ -125,8 +155,6 @@ if __name__ == "__main__":
     epochs = FLAGS.epochs
     batch_size = FLAGS.batch_size
     embedding_dim = FLAGS.emb_dim
-    sparse_features = ['userId', 'docId']
-    dense_features = []
     num_users = 1538384
     num_items = 633391
 
