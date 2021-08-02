@@ -50,9 +50,9 @@ config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
 
 if 4 == FLAGS.model:
-    from ydzx.model.model_pnn_1 import Model
+    from ydzx.model.model_pnn import Model
 elif 1 == FLAGS.model:
-    from ydzx.model.model_pnn_con import Model
+    from ydzx.model.model_pnn import Model
 elif 2 == FLAGS.model:
     from ydzx.model.model_pnn import Model
 else:
@@ -126,23 +126,15 @@ def create_input_data():
     para = np.load(os.path.join(FLAGS.root_path, 'para.npy'), allow_pickle=True).item()
 
     # 构造特征嵌入
-    user_feature_columns = []
-    userId_feature_columns = [SparseFeat('userId', vocabulary_size=para['userId'], embedding_dim=FLAGS.entity_dim)]
-    for feat in SPARSE_FEATURES:
-        if feat in USER_FEATURES:
-            user_feature_columns.append(SparseFeat(feat, vocabulary_size=para[feat], embedding_dim=FLAGS.emb_dim))
+    id_feature_columns = [SparseFeat(feat, vocabulary_size=para[feat], embedding_dim=FLAGS.entity_dim) for feat in ['userId', 'docId']]
+    sparse_feature_columns = [SparseFeat(feat, vocabulary_size=para[feat], embedding_dim=FLAGS.emb_dim) for feat in SPARSE_FEATURES]
+    dense_feature_columns = [DenseFeat(feat, 1) for feat in DENSE_FEATURES]
+    val_feature_columns = [
+        VarLenSparseFeat(SparseFeat(feat, vocabulary_size=para[feat], embedding_dim=FLAGS.val_dim),
+                         maxlen=FLAGS.val_len) for feat in VAL_FEATURES]
+    input_feature_columns = sparse_feature_columns + dense_feature_columns + val_feature_columns
 
-    doc_feature_columns = []
-    docId_feature_columns = [SparseFeat('docId', vocabulary_size=para['docId'], embedding_dim=FLAGS.entity_dim)]
-    for feat in SPARSE_FEATURES + DENSE_FEATURES + VAL_FEATURES:
-        if feat in DOC_FEATURES:
-            if 'c1' == feat:
-                doc_feature_columns.append(SparseFeat('c1', vocabulary_size=para['c1'], embedding_dim=FLAGS.emb_dim))
-            elif feat in DENSE_FEATURES:
-                doc_feature_columns.append(DenseFeat(feat, 1))
-            else:
-                doc_feature_columns.append(VarLenSparseFeat(SparseFeat(feat, vocabulary_size=para[feat], embedding_dim=FLAGS.val_dim), maxlen=FLAGS.val_len))
-    feature_columns = [user_feature_columns, userId_feature_columns, doc_feature_columns, docId_feature_columns]
+    feature_columns = [id_feature_columns, input_feature_columns]
     # 为模型生成输入数据
     feature_names = ['userId', 'docId'] + SPARSE_FEATURES + DENSE_FEATURES + VAL_FEATURES
     train_model_input = {name: train[name] for name in feature_names}

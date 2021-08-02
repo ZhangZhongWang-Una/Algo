@@ -11,6 +11,8 @@ from deepctr.layers.utils import combined_dnn_input, concat_func, add_func, soft
 from deepctr.layers.interaction import InnerProductLayer, OutterProductLayer
 from deepctr.models import PNN
 
+from ydzx.model.model_deepctr import ConvLayer
+
 
 class MemoryLayer(Layer):
     def __init__(self, memory_size=8, dropout_rate=0.00, seed=1024, **kwargs):
@@ -101,64 +103,41 @@ class FeaLayer(Layer):
 def Model(feature_columns, args, num_users, num_items):
     print('\033[32;1m[MODEL]\033[0m Model_pnn.py \n')
     use_inner = True
-    use_outter = True
+    use_outter = False
 
-    user_feature_columns, userId_feature_columns, doc_feature_columns, docId_feature_columns = feature_columns
-    userId_features = build_input_features(userId_feature_columns)
-    itemId_features = build_input_features(docId_feature_columns)
+    id_feature_columns, input_feature_columns = feature_columns
+    id_features = build_input_features(id_feature_columns)
+    edge_features = build_input_features(input_feature_columns)
 
-    user_features = build_input_features(user_feature_columns)
-    item_features = build_input_features(doc_feature_columns)
-    inputs_list = list(user_features.values()) + list(item_features.values()) + list(userId_features.values()) + list(itemId_features.values())
+    inputs_list = list(id_features.values()) + list(edge_features.values())
 
-    userId_emb, _ = input_from_feature_columns(userId_features, userId_feature_columns, '1e-5', args.seed)
-    userId_emb = userId_emb[0]
-    userId_emb = keras.layers.Lambda(lambda x: tf.squeeze(x, axis=1))(userId_emb)
-    itemId_emb, _ = input_from_feature_columns(itemId_features, docId_feature_columns, '1e-5', args.seed)
-    itemId_emb = itemId_emb[0]
-    itemId_emb = keras.layers.Lambda(lambda x: tf.squeeze(x, axis=1))(itemId_emb)
+    # itemId_emb = keras.layers.Lambda(lambda x: tf.squeeze(x, axis=1))(itemId_emb)
 
-    user_embedding_list, _ = input_from_feature_columns(user_features, user_feature_columns, '1e-5', args.seed)
+    id_embedding_list, _ = input_from_feature_columns(id_features, id_feature_columns, '1e-5', args.seed)
+    edge_sparse_ebmeddings, edge_dense_ebmeddings = input_from_feature_columns(edge_features, input_feature_columns, '1e-5', args.seed)
+    edge_emb = combined_dnn_input(edge_sparse_ebmeddings, edge_dense_ebmeddings)
+
     # user_emb = tf.keras.layers.Flatten()(concat_func(user_embedding_list))
-    user_inner_product = tf.keras.layers.Flatten()(InnerProductLayer()(user_embedding_list))
-    user_outter_product = OutterProductLayer('mat')(user_embedding_list)
-    user_linear_signal = tf.keras.layers.Reshape([sum(map(lambda x: int(x.shape[-1]), user_embedding_list))])(concat_func(user_embedding_list))
-
-    item_embedding_list, _ = input_from_feature_columns(item_features, doc_feature_columns, '1e-5', args.seed)
-    item_emb = combined_dnn_input(item_embedding_list, _)
-    item_emb = Concatenate()([itemId_emb, item_emb])
-
-    # item_inner_product = tf.keras.layers.Flatten()(InnerProductLayer()(item_embedding_list))
-    # item_outter_product = OutterProductLayer('mat')(item_embedding_list)
-    # item_linear_signal = tf.keras.layers.Reshape([sum(map(lambda x: int(x.shape[-1]), item_embedding_list))])(concat_func(item_embedding_list))
+    user_inner_product = tf.keras.layers.Flatten()(InnerProductLayer()(id_embedding_list))
+    user_outter_product = OutterProductLayer('mat')(id_embedding_list)
+    user_linear_signal = tf.keras.layers.Reshape([sum(map(lambda x: int(x.shape[-1]), id_embedding_list))])(concat_func(id_embedding_list))
 
     # ipnn deep input
     if use_inner and use_outter:
-        user_emb = Concatenate()([userId_emb, user_linear_signal, user_inner_product, user_outter_product])
-        # item_emb = tf.keras.layers.Concatenate()([itemId_emb, item_linear_signal, item_inner_product, item_outter_product])
+        user_emb = Concatenate()([user_linear_signal, user_inner_product, user_outter_product, edge_emb])
     elif use_inner:
-        user_emb = Concatenate()([userId_emb, user_linear_signal, user_inner_product])
-        # item_emb = tf.keras.layers.Concatenate()([itemId_emb, item_linear_signal, item_inner_product])
+        user_emb = Concatenate()([user_linear_signal, user_inner_product, edge_emb])
     elif use_outter:
-        user_emb = Concatenate()([userId_emb, user_linear_signal, user_outter_product])
-        # item_emb = tf.keras.layers.Concatenate()([itemId_emb, item_linear_signal, item_outter_product])
+        user_emb = Concatenate()([user_linear_signal, user_outter_product, edge_emb])
     else:
-        user_emb = Concatenate()([userId_emb, user_linear_signal])
-        # item_emb = tf.keras.layers.Concatenate()([itemId_emb, item_linear_signal])
+        user_emb = Concatenate()([user_linear_signal, edge_emb])
 
     # 交互层
     mem_out = MemoryLayer(memory_size=args.mem_size)(user_emb)
-    d_user = Dense(args.den_dim, activation='relu', kernel_initializer=random_normal(mean=0, stddev=0.02, seed=args.seed), bias_initializer=constant(0.1), kernel_regularizer=l2(args.l2))(mem_out)
-    d_item = Dense(args.den_dim, activation='relu', kernel_initializer=random_normal(mean=0, stddev=0.02, seed=args.seed), bias_initializer=constant(0.1), kernel_regularizer=l2(args.l2))(item_emb)
+    conv_out = ConvLayer(args.conv_dim)(mem_out)
+    dnn_out = DNN((args.dnn1, args.dnn2), 'relu', args.l2, args.dropout, use_bn=False, seed=args.seed)(conv_out)
 
-    # a_user, a_item = AffinityLayer(args.den_dim, args.l2, args.seed)([d_user, d_item])
-    # fea = FeaLayer()([a_user, a_item])
-    fea = FeaLayer()([d_user, d_item])
-
-    dnn_out = DNN((args.dnn1, args.dnn2), 'relu', args.l2, args.dropout, use_bn=False, seed=args.seed)(fea)
-
-    logit = Dense(1, use_bias=False, activation=None)(dnn_out)
-
+    logit = tf.keras.layers.Dense(1, use_bias=False, activation=None)(dnn_out)
     output = PredictionLayer('binary')(logit)
 
     model = keras.models.Model(
